@@ -1,0 +1,7 @@
+╔══════════════════════════════════════════════════════╗[ Info: Listening on: 127.0.0.1:8080, thread id: 1
+
+║  Bertrand Competition Server                         ║
+║  Dashboard → http://127.0.0.1:8080               ║
+║  WebSocket → ws://127.0.0.1:8765                   ║
+╚══════════════════════════════════════════════════════╝
+[ Info: Listening on: 127.0.0.1:8765, thread id: 1

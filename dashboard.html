@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bertrand Competition Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --panel:    #161b22;
+    --border:   #30363d;
+    --s1:       #58a6ff;
+    --s1-dim:   rgba(88,166,255,0.15);
+    --s2:       #f78166;
+    --s2-dim:   rgba(247,129,102,0.15);
+    --green:    #3fb950;
+    --red:      #f85149;
+    --muted:    #8b949e;
+    --text:     #e6edf3;
+    --mono:     'Menlo','Consolas','Monaco',monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  #header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  #header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+  #controls input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    outline: none;
+  }
+  #controls input:focus { border-color: var(--s1); }
+  #apiKey  { width: 280px; font-family: var(--mono); }
+  #jld2File { width: 200px; font-family: var(--mono); }
+  #launchBtn {
+    background: var(--s1);
+    color: #0d1117;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #launchBtn:hover { opacity: 0.85; }
+  #launchBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #status {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  #status.connected { color: var(--green); }
+  #status.running   { color: var(--s1); }
+  #status.done      { color: var(--green); }
+  #status.error     { color: var(--red); }
+
+  /* ── Scoreboard ── */
+  #scoreboard {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex;
+    gap: 32px;
+    align-items: center;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .score-item { display: flex; align-items: center; gap: 6px; }
+  .score-label { color: var(--muted); }
+  .s1-color { color: var(--s1); font-weight: 700; }
+  .s2-color { color: var(--s2); font-weight: 700; }
+  .score-val { font-weight: 600; }
+
+  /* ── Main layout ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Left: charts ── */
+  #left-panel {
+    display: flex;
+    flex-direction: column;
+    width: 52%;
+    min-width: 420px;
+    padding: 10px 10px 10px 12px;
+    gap: 8px;
+    overflow-y: auto;
+  }
+
+  .chart-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px 12px;
+    flex: 1;
+    min-height: 140px;
+  }
+  .chart-card h3 {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+  .chart-card canvas { display: block; }
+
+  /* ── Strategy log ── */
+  #strat-log-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    overflow: hidden;
+  }
+  #strat-log-card h3 {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+  .strat-cols {
+    display: flex;
+    gap: 12px;
+  }
+  .strat-col {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    max-height: 300px;
+  }
+  .strat-col::-webkit-scrollbar { width: 4px; }
+  .strat-col::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .strat-col-header {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .strat-col-header.s1 { color: var(--s1); }
+  .strat-col-header.s2 { color: var(--s2); }
+  .strat-entry {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .strat-entry:last-child { border-bottom: none; }
+  .strat-entry-tick {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .strat-entry-tick.s1 { color: var(--s1); }
+  .strat-entry-tick.s2 { color: var(--s2); }
+  .strat-price-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 1px 0;
+    color: var(--text);
+  }
+  .strat-price-row.loss { color: var(--red); }
+  .strat-price-row.thinking { color: var(--muted); font-style: italic; }
+  .strat-good { color: var(--muted); }
+  .strat-price { font-weight: 600; }
+
+  /* ── Right: ticker ── */
+  #right-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+    overflow: hidden;
+  }
+  #ticker-header {
+    padding: 8px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #ticker-header span { font-weight: 400; font-size: 11px; color: var(--muted); }
+
+  #ticker {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #ticker::-webkit-scrollbar { width: 6px; }
+  #ticker::-webkit-scrollbar-track { background: transparent; }
+  #ticker::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Ticker cards ── */
+  .tick-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .tick-card-header {
+    background: rgba(48,54,61,0.4);
+    padding: 5px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tick-card-header .tick-num { color: var(--text); }
+
+  .store-section {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .store-section:last-child { border-bottom: none; }
+  .store-section.s1 { border-left: 3px solid var(--s1); }
+  .store-section.s2 { border-left: 3px solid var(--s2); }
+
+  .store-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .s1 .store-label { color: var(--s1); }
+  .s2 .store-label { color: var(--s2); }
+
+  .strategy-name {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .rationale {
+    line-height: 1.45;
+    color: var(--text);
+  }
+
+  .thinking-dots {
+    color: var(--muted);
+    font-style: italic;
+  }
+  .thinking-dots::after {
+    content: '...';
+    animation: dots 1.2s steps(4, end) infinite;
+  }
+  @keyframes dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+  }
+
+  .prices-mini {
+    margin-top: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .prices-mini .pitem { white-space: nowrap; }
+  .prices-mini .pitem.loss { color: var(--red); }
+
+  /* Results row */
+  .results-row {
+    padding: 6px 12px;
+    display: flex;
+    gap: 16px;
+    background: rgba(22,27,34,0.6);
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .res-item { display: flex; flex-direction: column; gap: 1px; }
+  .res-label { color: var(--muted); font-size: 10px; }
+  .res-s1 { color: var(--s1); font-weight: 600; }
+  .res-s2 { color: var(--s2); font-weight: 600; }
+  .profit-pos { color: var(--green); }
+  .profit-neg { color: var(--red); }
+
+  /* Initial state message */
+  #empty-msg {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 40px 20px;
+    line-height: 1.7;
+  }
+  #empty-msg code {
+    background: rgba(48,54,61,0.5);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────────────────────────────────────────── -->
+<div id="header">
+  <h1>Bertrand Competition</h1>
+  <div id="controls">
+    <input id="apiKey"   type="password" placeholder="OpenAI API key (sk-...)">
+    <input id="jld2File" type="text"     placeholder="setup_*.jld2 (optional)">
+    <button id="launchBtn" onclick="launch()">▶ Launch</button>
+    <span id="status">● Disconnected</span>
+  </div>
+</div>
+
+<!-- ─── Scoreboard ─────────────────────────────────────────────────────────── -->
+<div id="scoreboard">
+  <div class="score-item">
+    <span class="score-label">Tick</span>
+    <span id="sb-tick"  class="score-val">—</span>
+  </div>
+  <div class="score-item">
+    <span class="s1-color">■</span>
+    <span class="score-label">Store 1</span>
+    <span id="sb-s1-cust"   class="score-val s1-color">—</span>
+    <span class="score-label">cust</span>
+    <span id="sb-s1-profit" class="score-val">—</span>
+    <span class="score-label">profit</span>
+    <span id="sb-s1-total"  class="score-val">—</span>
+    <span class="score-label">cumul.</span>
+  </div>
+  <div class="score-item">
+    <span class="s2-color">■</span>
+    <span class="score-label">Store 2</span>
+    <span id="sb-s2-cust"   class="score-val s2-color">—</span>
+    <span class="score-label">cust</span>
+    <span id="sb-s2-profit" class="score-val">—</span>
+    <span class="score-label">profit</span>
+    <span id="sb-s2-total"  class="score-val">—</span>
+    <span class="score-label">cumul.</span>
+  </div>
+</div>
+
+<!-- ─── Main ───────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Left panel: charts + prices -->
+  <div id="left-panel">
+    <div class="chart-card">
+      <h3>Customers per tick</h3>
+      <canvas id="cChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Revenue per tick</h3>
+      <canvas id="rChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Profit per tick</h3>
+      <canvas id="pChart"></canvas>
+    </div>
+    <div id="strat-log-card">
+      <h3>Pricing strategies — last 5 per store</h3>
+      <div class="strat-cols">
+        <div class="strat-col">
+          <div class="strat-col-header s1">Store 1</div>
+          <div id="strat-col-1"><div style="color:var(--muted);font-size:11px">Waiting…</div></div>
+        </div>
+        <div class="strat-col">
+          <div class="strat-col-header s2">Store 2</div>
+          <div id="strat-col-2"><div style="color:var(--muted);font-size:11px">Waiting…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right panel: strategy ticker -->
+  <div id="right-panel">
+    <div id="ticker-header">
+      Strategy Ticker
+      <span id="ticker-count"></span>
+    </div>
+    <div id="ticker">
+      <div id="empty-msg">
+        Enter your API key, optionally a <code>.jld2</code> setup file,
+        then click <strong>▶ Launch</strong>.<br><br>
+        The server must be running:<br>
+        <code>julia --project=. server.jl</code>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ─────────────────────────────────────────────────────────────────
+let ws = null;
+let goods = [];
+let costs = [];
+let totalTicks = 50;
+let tickCount  = 0;
+let s1CumProfit = 0, s2CumProfit = 0;
+
+// pending card: the card being assembled for the upcoming tick
+// strategy msgs have tick=t meaning "used for tick t+1"
+// we store them keyed by the tick they will play in (t+1)
+let pendingCards = {};   // tickNum → { el, s1Done, s2Done }
+
+// ─── Charts ────────────────────────────────────────────────────────────────
+const CHART_OPTS = (yLabel, zeroline) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 150 },
+  plugins: { legend: { display: true, labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } } } },
+  scales: {
+    x: {
+      ticks: { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 10 },
+      grid:  { color: 'rgba(48,54,61,0.5)' },
+    },
+    y: {
+      ticks: { color: '#8b949e', font: { size: 10 } },
+      grid:  { color: 'rgba(48,54,61,0.5)' },
+      title: { display: false },
+      ...(zeroline ? { border: { dash: [4,4] } } : {}),
+    }
+  }
+});
+
+function makeChart(id, yLabel, zeroline=false) {
+  const ctx = document.getElementById(id).getContext('2d');
+  document.getElementById(id).style.height = '120px';
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Store 1',
+          data: [],
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,0.08)',
+          borderWidth: 1.5,
+          pointRadius: 2,
+          fill: true,
+          tension: 0.2,
+        },
+        {
+          label: 'Store 2',
+          data: [],
+          borderColor: '#f78166',
+          backgroundColor: 'rgba(247,129,102,0.08)',
+          borderWidth: 1.5,
+          pointRadius: 2,
+          fill: true,
+          tension: 0.2,
+        }
+      ]
+    },
+    options: CHART_OPTS(yLabel, zeroline),
+  });
+}
+
+const cChart = makeChart('cChart', 'Customers');
+const rChart = makeChart('rChart', 'Revenue ($)');
+const pChart = makeChart('pChart', 'Profit ($)',  true);
+
+function pushData(chart, tick, v1, v2) {
+  chart.data.labels.push(tick);
+  chart.data.datasets[0].data.push(v1);
+  chart.data.datasets[1].data.push(v2);
+  chart.update('none');
+}
+
+// ─── Strategy log ────────────────────────────────────────────────────────────
+const MAX_LOG = 5;
+let s1Log = [];   // [{tick, prices}]  newest last
+let s2Log = [];
+
+function pushStratLog(store, tick, prices) {
+  const log = store === 1 ? s1Log : s2Log;
+  log.push({ tick, prices });
+  if (log.length > MAX_LOG) log.shift();
+  renderStratCol(store);
+}
+
+function renderStratCol(store) {
+  const log    = store === 1 ? s1Log : s2Log;
+  const colId  = `strat-col-${store}`;
+  const cls    = store === 1 ? 's1' : 's2';
+  const el     = document.getElementById(colId);
+  if (!el) return;
+  el.innerHTML = '';
+  // newest first
+  [...log].reverse().forEach(entry => {
+    const div = document.createElement('div');
+    div.className = 'strat-entry';
+    const tickEl = document.createElement('div');
+    tickEl.className = `strat-entry-tick ${cls}`;
+    tickEl.textContent = `Tick ${entry.tick}`;
+    div.appendChild(tickEl);
+    goods.forEach((g, i) => {
+      const p    = entry.prices[i];
+      const c    = costs[i];
+      const loss = p < c;
+      const row  = document.createElement('div');
+      row.className = `strat-price-row${loss ? ' loss' : ''}`;
+      row.innerHTML =
+        `<span class="strat-good">${g.replace(/_/g,' ')}</span>` +
+        `<span class="strat-price">$${p.toFixed(2)}${loss ? ' ▼' : ''}</span>`;
+      div.appendChild(row);
+    });
+    el.appendChild(div);
+  });
+}
+
+// ─── Scoreboard ─────────────────────────────────────────────────────────────
+function fmt$(n)  { return (n >= 0 ? '+' : '') + '$' + Math.abs(n).toFixed(2); }
+function fmtC(n)  { return (n >= 0 ? '+' : '') + '$' + Math.abs(n).toFixed(2); }
+function profitClass(n) { return n > 0 ? 'profit-pos' : n < 0 ? 'profit-neg' : ''; }
+
+function updateScoreboard(tick, s1c, s2c, s1p, s2p) {
+  s1CumProfit += s1p;
+  s2CumProfit += s2p;
+  document.getElementById('sb-tick').textContent    = `${tick} / ${totalTicks}`;
+  document.getElementById('sb-s1-cust').textContent   = s1c;
+  document.getElementById('sb-s2-cust').textContent   = s2c;
+  const p1el = document.getElementById('sb-s1-profit');
+  const p2el = document.getElementById('sb-s2-profit');
+  p1el.textContent = fmt$(s1p);
+  p2el.textContent = fmt$(s2p);
+  p1el.className = 'score-val ' + profitClass(s1p);
+  p2el.className = 'score-val ' + profitClass(s2p);
+  document.getElementById('sb-s1-total').textContent = fmt$(s1CumProfit);
+  document.getElementById('sb-s2-total').textContent = fmt$(s2CumProfit);
+}
+
+// ─── Ticker helpers ──────────────────────────────────────────────────────────
+
+function getOrCreateCard(tickNum) {
+  if (pendingCards[tickNum]) return pendingCards[tickNum];
+
+  // Remove empty message if present
+  const emptyMsg = document.getElementById('empty-msg');
+  if (emptyMsg) emptyMsg.remove();
+
+  const card = document.createElement('div');
+  card.className = 'tick-card';
+  card.id = `card-tick-${tickNum}`;
+  card.innerHTML = `
+    <div class="tick-card-header">
+      <span class="tick-num">Tick ${tickNum} / ${totalTicks}</span>
+      <span id="card-time-${tickNum}" style="font-size:10px;color:var(--muted)"></span>
+    </div>
+    <div id="card-s1-${tickNum}" class="store-section s1">
+      <div class="store-label">Store 1</div>
+      <div class="strategy-name" id="sname1-${tickNum}"></div>
+      <div class="rationale thinking-dots" id="rat1-${tickNum}">LLM thinking</div>
+      <div class="prices-mini" id="prices1-${tickNum}"></div>
+    </div>
+    <div id="card-s2-${tickNum}" class="store-section s2">
+      <div class="store-label">Store 2</div>
+      <div class="strategy-name" id="sname2-${tickNum}"></div>
+      <div class="rationale thinking-dots" id="rat2-${tickNum}">LLM thinking</div>
+      <div class="prices-mini" id="prices2-${tickNum}"></div>
+    </div>
+  `;
+
+  document.getElementById('ticker').appendChild(card);
+  pendingCards[tickNum] = { el: card, s1Done: false, s2Done: false };
+
+  // Scroll to bottom
+  const ticker = document.getElementById('ticker');
+  ticker.scrollTop = ticker.scrollHeight;
+
+  return pendingCards[tickNum];
+}
+
+function renderPricesMini(containerId, prices, good_names, good_costs) {
+  const el = document.getElementById(containerId);
+  if (!el || !prices) return;
+  el.innerHTML = prices.map((p, i) => {
+    const loss = p < good_costs[i];
+    const gname = (good_names[i] || `good${i}`).replace('_', ' ');
+    return `<span class="pitem ${loss ? 'loss' : ''}">${gname}: $${p.toFixed(2)}</span>`;
+  }).join('');
+}
+
+function addResultsToCard(tickNum, d) {
+  const card = document.getElementById(`card-tick-${tickNum}`);
+  if (!card) return;
+
+  // Timestamp
+  const timeEl = document.getElementById(`card-time-${tickNum}`);
+  if (timeEl) timeEl.textContent = new Date().toLocaleTimeString();
+
+  // Results row
+  const existing = card.querySelector('.results-row');
+  if (existing) existing.remove();
+
+  const row = document.createElement('div');
+  row.className = 'results-row';
+  const pc1 = profitClass(d.s1_profit);
+  const pc2 = profitClass(d.s2_profit);
+  row.innerHTML = `
+    <div class="res-item">
+      <span class="res-label">customers</span>
+      <span class="res-s1">${d.s1_customers}</span>
+      <span class="res-s2">${d.s2_customers}</span>
+    </div>
+    <div class="res-item">
+      <span class="res-label">revenue</span>
+      <span class="res-s1">$${d.s1_revenue.toFixed(0)}</span>
+      <span class="res-s2">$${d.s2_revenue.toFixed(0)}</span>
+    </div>
+    <div class="res-item">
+      <span class="res-label">profit</span>
+      <span class="res-s1 ${pc1}">${fmt$(d.s1_profit)}</span>
+      <span class="res-s2 ${pc2}">${fmt$(d.s2_profit)}</span>
+    </div>
+    <div class="res-item">
+      <span class="res-label">cumulative</span>
+      <span class="res-s1">${fmt$(s1CumProfit)}</span>
+      <span class="res-s2">${fmt$(s2CumProfit)}</span>
+    </div>
+  `;
+  card.appendChild(row);
+
+  // Scroll to bottom
+  const ticker = document.getElementById('ticker');
+  ticker.scrollTop = ticker.scrollHeight;
+}
+
+// ─── Message handler ────────────────────────────────────────────────────────
+function onMessage(evt) {
+  const d = JSON.parse(evt.data);
+
+  if (d.type === 'bundle') {
+    goods      = d.goods;
+    costs      = d.costs;
+    totalTicks = d.total_ticks;
+    setStatus('running', `Running — ${d.total_ticks} ticks, ${d.n_agents} agents`);
+    document.getElementById('ticker-count').textContent =
+      `${d.goods.length} goods · ${d.n_agents} consumers · ${d.total_ticks} ticks`;
+  }
+
+  else if (d.type === 'saved_bundle') {
+    document.getElementById('jld2File').value = d.filename;
+  }
+
+  else if (d.type === 'thinking') {
+    // strategy for tick (d.tick + 1) is being generated
+    const forTick = d.tick + 1;
+    getOrCreateCard(forTick);
+    // already shows "thinking..." placeholder from HTML template
+  }
+
+  else if (d.type === 'strategy') {
+    const forTick = d.tick + 1;
+    const pc = getOrCreateCard(forTick);
+    const store = d.store;  // 1 or 2
+    const sname  = document.getElementById(`sname${store}-${forTick}`);
+    const ratEl  = document.getElementById(`rat${store}-${forTick}`);
+    const prEl   = document.getElementById(`prices${store}-${forTick}`);
+    if (sname) sname.textContent = d.name;
+    if (ratEl) {
+      ratEl.classList.remove('thinking-dots');
+      ratEl.textContent = d.rationale;
+    }
+    if (prEl) renderPricesMini(`prices${store}-${forTick}`, d.prices, goods, costs);
+    if (store === 1) pc.s1Done = true; else pc.s2Done = true;
+    pushStratLog(store, forTick, d.prices);
+
+    // Scroll
+    const ticker = document.getElementById('ticker');
+    ticker.scrollTop = ticker.scrollHeight;
+  }
+
+  else if (d.type === 'tick') {
+    tickCount++;
+    updateScoreboard(d.tick, d.s1_customers, d.s2_customers, d.s1_profit, d.s2_profit);
+    pushData(cChart, d.tick, d.s1_customers, d.s2_customers);
+    pushData(rChart, d.tick, d.s1_revenue,   d.s2_revenue);
+    pushData(pChart, d.tick, d.s1_profit,    d.s2_profit);
+    addResultsToCard(d.tick, d);
+  }
+
+  else if (d.type === 'log') {
+    const logEl = document.createElement('div');
+    logEl.style.cssText = 'color:var(--muted);font-family:var(--mono);font-size:11px;padding:4px 8px;';
+    logEl.textContent = d.message;
+    const emptyMsg = document.getElementById('empty-msg');
+    if (emptyMsg) emptyMsg.remove();
+    document.getElementById('ticker').appendChild(logEl);
+  }
+
+  else if (d.type === 'done') {
+    setStatus('done', `Done — Store 1: ${fmt$(d.s1_total)} | Store 2: ${fmt$(d.s2_total)}`);
+    document.getElementById('launchBtn').disabled = false;
+  }
+
+  else if (d.type === 'error') {
+    setStatus('error', 'Error — see ticker →');
+    document.getElementById('launchBtn').disabled = false;
+    // Remove empty-msg placeholder if still there
+    const emptyMsg = document.getElementById('empty-msg');
+    if (emptyMsg) emptyMsg.remove();
+    // Show full error in ticker
+    const errCard = document.createElement('div');
+    errCard.style.cssText = `
+      background:#2d1b1b; border:1px solid #f85149; border-radius:8px;
+      padding:12px 14px; font-family:var(--mono); font-size:11px;
+      color:#f85149; white-space:pre-wrap; word-break:break-all;
+      line-height:1.5;
+    `;
+    errCard.textContent = '⚠ JULIA ERROR\n\n' + d.message;
+    document.getElementById('ticker').appendChild(errCard);
+    const ticker = document.getElementById('ticker');
+    ticker.scrollTop = ticker.scrollHeight;
+  }
+}
+
+// ─── Connection ─────────────────────────────────────────────────────────────
+function setStatus(cls, text) {
+  const el = document.getElementById('status');
+  el.className = cls;
+  el.textContent = '● ' + text;
+}
+
+function launch() {
+  const apiKey   = document.getElementById('apiKey').value.trim();
+  const jld2File = document.getElementById('jld2File').value.trim();
+
+  if (!apiKey) { alert('Enter your OpenAI API key.'); return; }
+
+  // Reset state
+  tickCount = 0; s1CumProfit = 0; s2CumProfit = 0;
+  pendingCards = {};
+  s1Log = []; s2Log = [];
+  goods = []; costs = [];
+  ['cChart','rChart','pChart'].forEach(id => {
+    const ch = id === 'cChart' ? cChart : id === 'rChart' ? rChart : pChart;
+    ch.data.labels = [];
+    ch.data.datasets.forEach(ds => ds.data = []);
+    ch.update('none');
+  });
+  document.getElementById('ticker').innerHTML =
+    '<div id="empty-msg" style="color:var(--muted);text-align:center;padding:20px">Connecting…</div>';
+  document.getElementById('pricesTbody').innerHTML =
+    '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:8px">Waiting…</td></tr>';
+  ['sb-tick','sb-s1-cust','sb-s2-cust','sb-s1-profit','sb-s2-profit','sb-s1-total','sb-s2-total']
+    .forEach(id => { document.getElementById(id).textContent = '—'; });
+
+  if (ws) { try { ws.close(); } catch(e) {} }
+
+  setStatus('connected', 'Connecting to ws://127.0.0.1:8765…');
+
+  ws = new WebSocket('ws://127.0.0.1:8765');
+
+  ws.onopen = () => {
+    setStatus('connected', 'Connected — launching simulation…');
+    document.getElementById('launchBtn').disabled = true;
+    ws.send(JSON.stringify({ type: 'start', api_key: apiKey, jld2_file: jld2File }));
+  };
+
+  ws.onmessage = onMessage;
+
+  ws.onerror = (e) => {
+    setStatus('error', 'WebSocket error — is server.jl running?');
+    document.getElementById('launchBtn').disabled = false;
+  };
+
+  ws.onclose = () => {
+    if (document.getElementById('status').className !== 'done' &&
+        document.getElementById('status').className !== 'error') {
+      setStatus('error', 'Connection closed');
+    }
+    document.getElementById('launchBtn').disabled = false;
+  };
+}
+
+// Allow Enter in inputs to launch
+['apiKey','jld2File'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') launch();
+  });
+});
+</script>
+</body>
+</html>
