@@ -35,14 +35,15 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
                            consumers::Vector{Consumer};
                            no_loss_constraint::Bool=false,
                            seek_nash::Bool=false,
-                           utility_noise_sigma::Float64=0.0)
+                           utility_noise_sigma::Float64=0.0,
+                           lookback::Int=L)
     store1 = init_store(1)
     store2 = init_store(2)
 
     # ── Initial strategies (before tick 1) ───────────────────────────────────
     ws_send(ws, Dict("type" => "thinking", "store" => 1, "tick" => 0))
     strategy1, rat1 = generate_strategy(api_key, 1, 0, bundle, store1, store2;
-                                        no_loss_constraint, seek_nash)
+                                        no_loss_constraint, seek_nash; lookback)
     ws_send(ws, Dict("type"      => "strategy",
                      "store"     => 1, "tick" => 0,
                      "name"      => string(typeof(strategy1)),
@@ -51,7 +52,7 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
 
     ws_send(ws, Dict("type" => "thinking", "store" => 2, "tick" => 0))
     strategy2, rat2 = generate_strategy(api_key, 2, 0, bundle, store2, store1;
-                                        no_loss_constraint, seek_nash)
+                                        no_loss_constraint, seek_nash; lookback)
     ws_send(ws, Dict("type"      => "strategy",
                      "store"     => 2, "tick" => 0,
                      "name"      => string(typeof(strategy2)),
@@ -117,7 +118,7 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
         if tick < T_PERIODS
             ws_send(ws, Dict("type" => "thinking", "store" => 1, "tick" => tick))
             strategy1, rat1 = generate_strategy(api_key, 1, tick, bundle, store1, store2;
-                                                no_loss_constraint, seek_nash)
+                                                no_loss_constraint, seek_nash; lookback)
             ws_send(ws, Dict("type"      => "strategy",
                              "store"     => 1, "tick" => tick,
                              "name"      => string(typeof(strategy1)),
@@ -126,7 +127,7 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
 
             ws_send(ws, Dict("type" => "thinking", "store" => 2, "tick" => tick))
             strategy2, rat2 = generate_strategy(api_key, 2, tick, bundle, store2, store1;
-                                                no_loss_constraint, seek_nash)
+                                                no_loss_constraint, seek_nash; lookback)
             ws_send(ws, Dict("type"      => "strategy",
                              "store"     => 2, "tick" => tick,
                              "name"      => string(typeof(strategy2)),

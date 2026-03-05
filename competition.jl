@@ -210,11 +210,11 @@ $loss_constraint_str$nash_str
 GOODS AND WHOLESALE COSTS:
 $goods_str
 
-YOUR HISTORY (last $L ticks) — your prices and your profit:
-$(fmt_history_own(own_store, bundle))
+YOUR HISTORY (last $lookback ticks) — your prices and your profit:
+$(fmt_history_own(own_store, bundle, lookback))
 
-COMPETITOR'S PRICING (last $L ticks) — prices only, their profit is not observable:
-$(fmt_history_opp(opp_store, bundle))
+COMPETITOR'S PRICING (last $lookback ticks) — prices only, their profit is not observable:
+$(fmt_history_opp(opp_store, bundle, lookback))
 
 Return a JSON object with exactly two fields:
 
