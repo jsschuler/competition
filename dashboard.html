@@ -384,6 +384,15 @@
       <input type="checkbox" id="noLossToggle">
       No sustained losses
     </label>
+    <label class="toggle-label" title="Instructs each LLM agent to seek a Nash equilibrium without communicating with the competitor">
+      <input type="checkbox" id="nashToggle">
+      Seek Nash equilibrium
+    </label>
+    <label class="toggle-label" title="Std dev of per-period store-choice utility shock (0 = off)">
+      Utility noise σ
+      <input type="number" id="utilityNoiseSigma" value="0" min="0" step="0.1"
+             style="width:60px;margin-left:4px">
+    </label>
     <button id="launchBtn" onclick="launch()">▶ Launch</button>
     <span id="status">● Disconnected</span>
   </div>
@@ -804,6 +813,8 @@ function launch() {
   const apiKey   = document.getElementById('apiKey').value.trim();
   const jld2File = document.getElementById('jld2File').value.trim();
   const noLoss   = document.getElementById('noLossToggle').checked;
+  const seekNash        = document.getElementById('nashToggle').checked;
+  const utilityNoiseSigma = parseFloat(document.getElementById('utilityNoiseSigma').value) || 0;
 
   if (!apiKey) { alert('Enter your OpenAI API key.'); return; }
 
@@ -834,7 +845,7 @@ function launch() {
   ws.onopen = () => {
     setStatus('connected', 'Connected — launching simulation…');
     document.getElementById('launchBtn').disabled = true;
-    ws.send(JSON.stringify({ type: 'start', api_key: apiKey, jld2_file: jld2File, no_loss_constraint: noLoss }));
+    ws.send(JSON.stringify({ type: 'start', api_key: apiKey, jld2_file: jld2File, no_loss_constraint: noLoss, seek_nash: seekNash, utility_noise_sigma: utilityNoiseSigma }));
   };
 
   ws.onmessage = onMessage;

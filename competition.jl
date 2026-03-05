@@ -175,7 +175,8 @@ end
 function generate_strategy(api_key::String, store_id::Int, tick::Int,
                             bundle::Bundle,
                             own_store::Store, opp_store::Store;
-                            no_loss_constraint::Bool=false)::Tuple{PricingStrategy, String}
+                            no_loss_constraint::Bool=false,
+                            seek_nash::Bool=false)::Tuple{PricingStrategy, String}
     N    = next_strategy_number()
     sname = strategy_name(N)
 
@@ -191,11 +192,20 @@ profitability. Brief loss-leading on individual goods is acceptable, but persist
 store-level losses are not.
 """ : ""
 
+    nash_str = seek_nash ? """
+OBJECTIVE: You are playing a non-cooperative game. Try to find a Nash equilibrium — \
+a price vector such that, given your competitor's prices, you have no incentive to \
+deviate unilaterally. You cannot communicate or coordinate with your competitor; \
+you must infer their likely strategy from observed price history and best-respond \
+accordingly. The Nash equilibrium in a Bertrand market is prices equal to marginal \
+cost, but with heterogeneous consumers and multiple goods the equilibrium may differ.
+""" : ""
+
     prompt = """
 You are the strategic pricing agent for Store $store_id in a repeated \
 competitive grocery game (current tick: $tick).
 Your goal is to maximise your store's cumulative profit over time.
-$loss_constraint_str
+$loss_constraint_str$nash_str
 GOODS AND WHOLESALE COSTS:
 $goods_str
 
@@ -383,7 +393,8 @@ end
 # ─── Main simulation loop ─────────────────────────────────────────────────────
 function run_simulation(api_key::String, bundle::Bundle,
                         consumers::Vector{Consumer},
-                        store1::Store, store2::Store)
+                        store1::Store, store2::Store;
+                        utility_noise_sigma::Float64=0.0)
 
     println("\n═══ Simulation start: $T_PERIODS ticks, $N_AGENTS consumers ══════════════")
 
@@ -404,7 +415,9 @@ function run_simulation(api_key::String, bundle::Bundle,
         for consumer in consumers
             u1, b1 = Base.invokelatest(feasible, strategy1, consumer.budget, consumer, bundle)
             u2, b2 = Base.invokelatest(feasible, strategy2, consumer.budget, consumer, bundle)
-            if u1 >= u2
+            e1 = utility_noise_sigma > 0.0 ? randn() * utility_noise_sigma : 0.0
+            e2 = utility_noise_sigma > 0.0 ? randn() * utility_noise_sigma : 0.0
+            if (u1 + e1) >= (u2 + e2)
                 push!(baskets1, b1)
             else
                 push!(baskets2, b2)
