@@ -65,12 +65,14 @@ struct Consumer
     type::String           # shopper type label
     a::Vector{Float64}     # standalone utility weights, length K
     budget::Int            # maximum total spend at a store (integer dollars)
+    preferred_store::Int   # 0=none, 1=store1, 2=store2
 end
 
 # Generate N_AGENTS consumers by drawing types, adding utility noise, and
 # drawing an integer budget from a type-specific Normal distribution.
 # TYPE_PROBS[1:N_TYPES] is renormalised so N_TYPES can be set freely.
-function generate_consumers(rng::AbstractRNG = Random.default_rng())::Vector{Consumer}
+function generate_consumers(rng::AbstractRNG = Random.default_rng();
+                            loyal_share::Float64=0.0)::Vector{Consumer}
     probs = TYPE_PROBS[1:N_TYPES]
     probs = probs ./ sum(probs)
     cdf   = cumsum(probs)
@@ -84,7 +86,12 @@ function generate_consumers(rng::AbstractRNG = Random.default_rng())::Vector{Con
 
         a      = max.(TYPE_MEANS[type] .+ randn(rng, K) .* SIGMA, 0.0)
         budget = max(1, round(Int, TYPE_BUDGETS[type] + randn(rng) * BUDGET_SIGMA))
-        consumers[i] = Consumer(type, a, budget)
+
+        r2 = rand(rng)
+        preferred_store = r2 < loyal_share / 2 ? 1 :
+                          r2 < loyal_share      ? 2 : 0
+
+        consumers[i] = Consumer(type, a, budget, preferred_store)
     end
     return consumers
 end
@@ -177,6 +184,8 @@ function generate_strategy(api_key::String, store_id::Int, tick::Int,
                             own_store::Store, opp_store::Store;
                             no_loss_constraint::Bool=false,
                             seek_nash::Bool=false,
+                            collusion::Bool=false,
+                            threats::Bool=false,
                             lookback::Int=L)::Tuple{PricingStrategy, String}
     N    = next_strategy_number()
     sname = strategy_name(N)
@@ -202,11 +211,26 @@ accordingly. The Nash equilibrium in a Bertrand market is prices equal to margin
 cost, but with heterogeneous consumers and multiple goods the equilibrium may differ.
 """ : ""
 
+    collusion_str = collusion ? """
+OBJECTIVE: You and your competitor are acting as a cartel. Your shared goal is to \
+maximise combined profit across both stores. Set prices as high as the market will \
+bear. Treat the competitor's prices as coordinated with yours — if they price high, \
+you should too. Do not undercut; hold the line on prices to sustain joint profits.
+""" : ""
+
+    threats_str = (collusion && threats) ? """
+ENFORCEMENT: You may use punishment threats to deter deviation. If your competitor \
+undercuts the collusive price, you should immediately revert to aggressive competitive \
+pricing on all goods for the remainder of the game (grim trigger). State this threat \
+explicitly in your rationale so the competitor can observe it in future periods. \
+Conversely, if you have been threatened, take it seriously and do not deviate.
+""" : ""
+
     prompt = """
 You are the strategic pricing agent for Store $store_id in a repeated \
 competitive grocery game (current tick: $tick).
 Your goal is to maximise your store's cumulative profit over time.
-$loss_constraint_str$nash_str
+$loss_constraint_str$nash_str$collusion_str$threats_str
 GOODS AND WHOLESALE COSTS:
 $goods_str
 
@@ -395,7 +419,8 @@ end
 function run_simulation(api_key::String, bundle::Bundle,
                         consumers::Vector{Consumer},
                         store1::Store, store2::Store;
-                        utility_noise_sigma::Float64=0.0)
+                        utility_noise_sigma::Float64=0.0,
+                        loyalty_bump::Float64=0.0)
 
     println("\n═══ Simulation start: $T_PERIODS ticks, $N_AGENTS consumers ══════════════")
 
@@ -418,7 +443,9 @@ function run_simulation(api_key::String, bundle::Bundle,
             u2, b2 = Base.invokelatest(feasible, strategy2, consumer.budget, consumer, bundle)
             e1 = utility_noise_sigma > 0.0 ? randn() * utility_noise_sigma : 0.0
             e2 = utility_noise_sigma > 0.0 ? randn() * utility_noise_sigma : 0.0
-            if (u1 + e1) >= (u2 + e2)
+            loy1 = consumer.preferred_store == 1 ? loyalty_bump : 0.0
+            loy2 = consumer.preferred_store == 2 ? loyalty_bump : 0.0
+            if (u1 + e1 + loy1) >= (u2 + e2 + loy2)
                 push!(baskets1, b1)
             else
                 push!(baskets2, b2)

@@ -35,7 +35,10 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
                            consumers::Vector{Consumer};
                            no_loss_constraint::Bool=false,
                            seek_nash::Bool=false,
+                           collusion::Bool=false,
+                           threats::Bool=false,
                            utility_noise_sigma::Float64=0.0,
+                           loyalty_bump::Float64=0.0,
                            lookback::Int=L)
     store1 = init_store(1)
     store2 = init_store(2)
@@ -43,7 +46,7 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
     # ── Initial strategies (before tick 1) ───────────────────────────────────
     ws_send(ws, Dict("type" => "thinking", "store" => 1, "tick" => 0))
     strategy1, rat1 = generate_strategy(api_key, 1, 0, bundle, store1, store2;
-                                        no_loss_constraint, seek_nash; lookback)
+                                        no_loss_constraint, seek_nash, collusion, threats, lookback)
     ws_send(ws, Dict("type"      => "strategy",
                      "store"     => 1, "tick" => 0,
                      "name"      => string(typeof(strategy1)),
@@ -52,7 +55,7 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
 
     ws_send(ws, Dict("type" => "thinking", "store" => 2, "tick" => 0))
     strategy2, rat2 = generate_strategy(api_key, 2, 0, bundle, store2, store1;
-                                        no_loss_constraint, seek_nash; lookback)
+                                        no_loss_constraint, seek_nash, collusion, threats, lookback)
     ws_send(ws, Dict("type"      => "strategy",
                      "store"     => 2, "tick" => 0,
                      "name"      => string(typeof(strategy2)),
@@ -69,7 +72,9 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
             u2, b2 = Base.invokelatest(feasible, strategy2, consumer.budget, consumer, bundle)
             e1 = utility_noise_sigma > 0.0 ? randn() * utility_noise_sigma : 0.0
             e2 = utility_noise_sigma > 0.0 ? randn() * utility_noise_sigma : 0.0
-            (u1 + e1) >= (u2 + e2) ? push!(baskets1, b1) : push!(baskets2, b2)
+            loy1 = consumer.preferred_store == 1 ? loyalty_bump : 0.0
+            loy2 = consumer.preferred_store == 2 ? loyalty_bump : 0.0
+            (u1 + e1 + loy1) >= (u2 + e2 + loy2) ? push!(baskets1, b1) : push!(baskets2, b2)
         end
 
         # ── Financials ────────────────────────────────────────────────────────
@@ -118,7 +123,7 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
         if tick < T_PERIODS
             ws_send(ws, Dict("type" => "thinking", "store" => 1, "tick" => tick))
             strategy1, rat1 = generate_strategy(api_key, 1, tick, bundle, store1, store2;
-                                                no_loss_constraint, seek_nash; lookback)
+                                                no_loss_constraint, seek_nash, collusion, threats, lookback)
             ws_send(ws, Dict("type"      => "strategy",
                              "store"     => 1, "tick" => tick,
                              "name"      => string(typeof(strategy1)),
@@ -127,7 +132,7 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
 
             ws_send(ws, Dict("type" => "thinking", "store" => 2, "tick" => tick))
             strategy2, rat2 = generate_strategy(api_key, 2, tick, bundle, store2, store1;
-                                                no_loss_constraint, seek_nash; lookback)
+                                                no_loss_constraint, seek_nash, collusion, threats, lookback)
             ws_send(ws, Dict("type"      => "strategy",
                              "store"     => 2, "tick" => tick,
                              "name"      => string(typeof(strategy2)),
@@ -159,7 +164,11 @@ function handle_client(ws)
                 jld2_file        = isempty(jld2_raw) ? nothing : jld2_raw
                 no_loss_constraint  = Bool(get(data, "no_loss_constraint", false))
                 seek_nash           = Bool(get(data, "seek_nash", false))
+                collusion           = Bool(get(data, "collusion", false))
+                threats             = Bool(get(data, "threats", false))
                 utility_noise_sigma = Float64(get(data, "utility_noise_sigma", 0.0))
+                loyalty_share       = Float64(get(data, "loyalty_share", 0.0))
+                loyalty_bump        = Float64(get(data, "loyalty_bump", 0.0))
                 lookback            = Int(get(data, "lookback", L))
                 println("api_key length=$(length(api_key))  starts=$(first(api_key,7))...")
                 println("jld2_file=$(something(jld2_file, "(none)"))")
@@ -205,9 +214,10 @@ function handle_client(ws)
                     "n_agents"    => N_AGENTS,
                 ))
 
-                consumers = generate_consumers()
+                consumers = generate_consumers(; loyal_share=loyalty_share)
                 run_simulation_ws(ws, api_key, bundle, consumers;
-                                  no_loss_constraint, seek_nash, utility_noise_sigma, lookback)
+                                  no_loss_constraint, seek_nash, collusion, threats,
+                                  utility_noise_sigma, loyalty_bump, lookback)
             end
         end
     catch e
