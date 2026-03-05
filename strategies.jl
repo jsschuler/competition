@@ -16690,3 +16690,55 @@ function feasible(s::Strategy_705002B5_642, budget::Int64, consumer::Consumer, b
     return best_u, best_x
 end
 
+
+# ── Strategy_705002B5_643 | Store 1 | tick 21 ──────────────────────────────
+# I have noticed that my competitor tends to price slightly above my offerings, particularly in high-margin items like coffee and bacon, but often matches me on lower-margin items like sugar. I will continue to undercut their prices slightly on high-margin items to attract customers, while maintaining competitive prices on essentials like milk and eggs to ensure steady foot traffic. This strategy aims to maximize profitability without engaging in a price war. I expect my profits to stabilize while maintaining a competitive edge over my rival.
+struct Strategy_705002B5_643 <: PricingStrategy
+    number::Int
+    tick_created::Int
+end
+
+get_prices(s::Strategy_705002B5_643) = Rational{Int}[27//17, 21//10, 17//13, 39//19, 27//10, 74//21, 50//9, 39//40, 11//8, 19//8]
+
+function feasible(s::Strategy_705002B5_643, budget::Int64, consumer::Consumer, bundle::Bundle)
+    prices = get_prices(s)
+    best_u = -Inf
+    best_x = zeros(Int, length(bundle.goods))
+    for x in ALL_BASKETS
+        if dot(prices, x) ≤ budget
+            u = dot(consumer.a, x) + 0.5 * (x' * bundle.B * x) - dot(prices, x)
+            if u > best_u
+                best_u = u
+                best_x = copy(x)
+            end
+        end
+    end
+    return best_u, best_x
+end
+
+
+# ── Strategy_705002B5_644 | Store 2 | tick 21 ──────────────────────────────
+# I observed that our competitor has slightly undercut us on milk, cereal, and eggs, which could affect our market share. To counter this, I will slightly reduce prices on these goods to remain competitive while increasing prices slightly on other goods like bacon and coffee where we have a little more pricing power, ensuring overall profitability. This strategy aims to maintain competitive positioning and avoid prolonged negative profits, anticipating a balanced outcome where we sustain profitability while not losing too much market share.
+struct Strategy_705002B5_644 <: PricingStrategy
+    number::Int
+    tick_created::Int
+end
+
+get_prices(s::Strategy_705002B5_644) = Rational{Int}[19//12, 21//10, 4//3, 33//16, 49//18, 25//7, 101//18, 66//67, 7//5, 12//5]
+
+function feasible(s::Strategy_705002B5_644, budget::Int64, consumer::Consumer, bundle::Bundle)
+    prices = get_prices(s)
+    best_u = -Inf
+    best_x = zeros(Int, length(bundle.goods))
+    for x in ALL_BASKETS
+        if dot(prices, x) ≤ budget
+            u = dot(consumer.a, x) + 0.5 * (x' * bundle.B * x) - dot(prices, x)
+            if u > best_u
+                best_u = u
+                best_x = copy(x)
+            end
+        end
+    end
+    return best_u, best_x
+end
+
