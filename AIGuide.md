@@ -311,3 +311,47 @@ The next concrete task is:
 **Generate the goods relationship matrix and numeric interaction matrix B.**
 
 That is the missing object required before coding consumer choice and demand aggregation.
+
+---
+
+## Implementation status
+
+The full simulation has been implemented in Julia (`competition.jl`, `server.jl`, `strategies.jl`). The following records what was completed and what was added beyond the original plan.
+
+### Completed from plan
+
+All 14 steps in the suggested coding order have been implemented:
+
+- Goods, shopper types, type means, and population shares match the plan exactly.
+- Consumer agents are generated with type-specific mean vectors, Normal noise (sigma=1.0), and clipping at zero.
+- All 2^10 = 1024 baskets are precomputed once at startup (`ALL_BASKETS`).
+- Both utility models are implemented: the simple `a'x` baseline and the full `a'x + 0.5 x'Bx`.
+- The B matrix, sign matrix, wholesale costs, and rationale are generated together by an LLM call (`generate_bundle`) and symmetry/zero-diagonal are enforced programmatically.
+- Consumers evaluate all baskets at each store under budget constraint, choose the store with higher maximized net utility, and their baskets aggregate into per-store revenue, cost, and profit.
+- LLM-generated pricing strategies are produced each period and repeated over T_PERIODS ticks.
+
+One minor gap from step 11: per-item demand aggregation is not separately reported (only total revenue and cost are printed). The basket data is collected and could support this easily.
+
+### Additions beyond the plan
+
+**Budget constraints.** Each consumer has an integer shopping budget drawn from a type-specific Normal distribution (`TYPE_BUDGETS`, `BUDGET_SIGMA`). Only baskets costing at most the budget are considered feasible. This was not in the original plan.
+
+**Store loyalty.** A `loyal_share` parameter assigns a fraction of consumers a preferred store. Loyal consumers receive a `loyalty_bump` added to their utility for their preferred store. Not in the original plan.
+
+**Utility noise on store choice.** A `utility_noise_sigma` parameter adds Normal noise to each consumer's store comparison, softening the hard argmax. Not in the original plan.
+
+**Behavioral treatment arms.** `generate_strategy` accepts flags `no_loss_constraint`, `seek_nash`, `collusion`, and `threats`. These modify the LLM prompt to run different experimental conditions. The original plan called for competitive pricing first and later extensions; this jumped ahead to include multiple conditions from the start.
+
+**Rational arithmetic.** Prices and costs are stored as `Rational{Int}` so that profit arithmetic is exact. Not discussed in the plan but a sound engineering choice.
+
+**Memory window L.** The LLM prompt for strategy generation includes the last L periods of own prices/profits and competitor prices. This operationalizes the repeated-game information structure.
+
+**JLD2 bundle persistence.** The generated bundle (goods, costs, B, sign matrix, rationale) is saved to a `.jld2` file and can be reloaded to make runs reproducible.
+
+**WebSocket server and dashboard.** A full WebSocket server (`server.jl`) and browser dashboard (`dashboard.html`) were added, enabling real-time visualization of the simulation. This is entirely outside the plan's scope.
+
+**Run ID for struct namespacing.** Each run generates a unique 8-character hex ID prepended to strategy struct names to prevent collisions when `strategies.jl` is reloaded across sessions.
+
+### Model choice note
+
+The implementation uses GPT-4o (OpenAI) as the pricing LLM. The plan did not specify which LLM to use. If the paper's central contribution is about LLM strategic behavior, reviewers may ask whether results generalize across models. Cross-model comparison (e.g., GPT-4o vs. Claude vs. Gemini) is a natural extension.
