@@ -143,11 +143,11 @@ end
 strategy_name(n::Int) = "Strategy_$(RUN_ID)_$(n)"
 
 # Own-store context: prices + profits (last L ticks).
-function fmt_history_own(store::Store, bundle::Bundle)::String
+function fmt_history_own(store::Store, bundle::Bundle, lookback::Int=L)::String
     T = length(store.profit_history)
     T == 0 && return "  (no history yet)"
     lines = String[]
-    for t in max(1, T - L + 1):T
+    for t in max(1, T - lookback + 1):T
         p = store.price_history[t]
         price_str = join([@sprintf("%s=%.2f", bundle.goods[k], Float64(p[k]))
                           for k in 1:length(bundle.goods)], ", ")
@@ -157,11 +157,11 @@ function fmt_history_own(store::Store, bundle::Bundle)::String
 end
 
 # Opponent context: prices ONLY — profits are not observable by the other store.
-function fmt_history_opp(store::Store, bundle::Bundle)::String
+function fmt_history_opp(store::Store, bundle::Bundle, lookback::Int=L)::String
     T = length(store.price_history)
     T == 0 && return "  (no history yet)"
     lines = String[]
-    for t in max(1, T - L + 1):T
+    for t in max(1, T - lookback + 1):T
         p = store.price_history[t]
         price_str = join([@sprintf("%s=%.2f", bundle.goods[k], Float64(p[k]))
                           for k in 1:length(bundle.goods)], ", ")
@@ -176,7 +176,8 @@ function generate_strategy(api_key::String, store_id::Int, tick::Int,
                             bundle::Bundle,
                             own_store::Store, opp_store::Store;
                             no_loss_constraint::Bool=false,
-                            seek_nash::Bool=false)::Tuple{PricingStrategy, String}
+                            seek_nash::Bool=false,
+                            lookback::Int=L)::Tuple{PricingStrategy, String}
     N    = next_strategy_number()
     sname = strategy_name(N)
 
