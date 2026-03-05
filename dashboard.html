@@ -380,6 +380,11 @@
   <div id="controls">
     <input id="apiKey"   type="password" placeholder="OpenAI API key (sk-...)">
     <input id="jld2File" type="text"     placeholder="setup_*.jld2 (optional)">
+    <label class="toggle-label" title="Number of past periods shown to each LLM agent (look-back window)">
+      Look-back L
+      <input type="number" id="lookback" value="5" min="1" max="50" step="1"
+             style="width:50px;margin-left:4px">
+    </label>
     <label class="toggle-label" title="Instructs each LLM agent not to sustain negative profits for more than 1–2 consecutive periods">
       <input type="checkbox" id="noLossToggle">
       No sustained losses
@@ -812,6 +817,7 @@ function setStatus(cls, text) {
 function launch() {
   const apiKey   = document.getElementById('apiKey').value.trim();
   const jld2File = document.getElementById('jld2File').value.trim();
+  const lookback = parseInt(document.getElementById('lookback').value) || 5;
   const noLoss   = document.getElementById('noLossToggle').checked;
   const seekNash        = document.getElementById('nashToggle').checked;
   const utilityNoiseSigma = parseFloat(document.getElementById('utilityNoiseSigma').value) || 0;
@@ -845,7 +851,7 @@ function launch() {
   ws.onopen = () => {
     setStatus('connected', 'Connected — launching simulation…');
     document.getElementById('launchBtn').disabled = true;
-    ws.send(JSON.stringify({ type: 'start', api_key: apiKey, jld2_file: jld2File, no_loss_constraint: noLoss, seek_nash: seekNash, utility_noise_sigma: utilityNoiseSigma }));
+    ws.send(JSON.stringify({ type: 'start', api_key: apiKey, jld2_file: jld2File, lookback, no_loss_constraint: noLoss, seek_nash: seekNash, utility_noise_sigma: utilityNoiseSigma }));
   };
 
   ws.onmessage = onMessage;

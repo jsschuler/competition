@@ -157,9 +157,10 @@ function handle_client(ws)
                 api_key          = String(strip(String(data["api_key"])))
                 jld2_raw         = String(strip(String(get(data, "jld2_file", ""))))
                 jld2_file        = isempty(jld2_raw) ? nothing : jld2_raw
-                no_loss_constraint = Bool(get(data, "no_loss_constraint", false))
-                seek_nash          = Bool(get(data, "seek_nash", false))
+                no_loss_constraint  = Bool(get(data, "no_loss_constraint", false))
+                seek_nash           = Bool(get(data, "seek_nash", false))
                 utility_noise_sigma = Float64(get(data, "utility_noise_sigma", 0.0))
+                lookback            = Int(get(data, "lookback", L))
                 println("api_key length=$(length(api_key))  starts=$(first(api_key,7))...")
                 println("jld2_file=$(something(jld2_file, "(none)"))")
                 println("no_loss_constraint=$no_loss_constraint  seek_nash=$seek_nash  utility_noise_sigma=$utility_noise_sigma")
@@ -206,7 +207,7 @@ function handle_client(ws)
 
                 consumers = generate_consumers()
                 run_simulation_ws(ws, api_key, bundle, consumers;
-                                  no_loss_constraint, seek_nash, utility_noise_sigma)
+                                  no_loss_constraint, seek_nash, utility_noise_sigma, lookback)
             end
         end
     catch e
