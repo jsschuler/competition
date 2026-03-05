@@ -32,13 +32,15 @@ end
 #   thinking → strategy (×2)  →  tick result  →  thinking → strategy (×2)  → …
 
 function run_simulation_ws(ws, api_key::String, bundle::Bundle,
-                           consumers::Vector{Consumer})
+                           consumers::Vector{Consumer};
+                           no_loss_constraint::Bool=false)
     store1 = init_store(1)
     store2 = init_store(2)
 
     # ── Initial strategies (before tick 1) ───────────────────────────────────
     ws_send(ws, Dict("type" => "thinking", "store" => 1, "tick" => 0))
-    strategy1, rat1 = generate_strategy(api_key, 1, 0, bundle, store1, store2)
+    strategy1, rat1 = generate_strategy(api_key, 1, 0, bundle, store1, store2;
+                                        no_loss_constraint)
     ws_send(ws, Dict("type"      => "strategy",
                      "store"     => 1, "tick" => 0,
                      "name"      => string(typeof(strategy1)),
@@ -46,7 +48,8 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
                      "prices"    => prices_to_floats(strategy1)))
 
     ws_send(ws, Dict("type" => "thinking", "store" => 2, "tick" => 0))
-    strategy2, rat2 = generate_strategy(api_key, 2, 0, bundle, store2, store1)
+    strategy2, rat2 = generate_strategy(api_key, 2, 0, bundle, store2, store1;
+                                        no_loss_constraint)
     ws_send(ws, Dict("type"      => "strategy",
                      "store"     => 2, "tick" => 0,
                      "name"      => string(typeof(strategy2)),
@@ -109,7 +112,8 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
         # ── Generate next strategies ──────────────────────────────────────────
         if tick < T_PERIODS
             ws_send(ws, Dict("type" => "thinking", "store" => 1, "tick" => tick))
-            strategy1, rat1 = generate_strategy(api_key, 1, tick, bundle, store1, store2)
+            strategy1, rat1 = generate_strategy(api_key, 1, tick, bundle, store1, store2;
+                                                no_loss_constraint)
             ws_send(ws, Dict("type"      => "strategy",
                              "store"     => 1, "tick" => tick,
                              "name"      => string(typeof(strategy1)),
@@ -117,7 +121,8 @@ function run_simulation_ws(ws, api_key::String, bundle::Bundle,
                              "prices"    => prices_to_floats(strategy1)))
 
             ws_send(ws, Dict("type" => "thinking", "store" => 2, "tick" => tick))
-            strategy2, rat2 = generate_strategy(api_key, 2, tick, bundle, store2, store1)
+            strategy2, rat2 = generate_strategy(api_key, 2, tick, bundle, store2, store1;
+                                                no_loss_constraint)
             ws_send(ws, Dict("type"      => "strategy",
                              "store"     => 2, "tick" => tick,
                              "name"      => string(typeof(strategy2)),
@@ -144,11 +149,13 @@ function handle_client(ws)
             msg_type = String(data["type"])
 
             if msg_type == "start"
-                api_key   = String(strip(String(data["api_key"])))   # strip newlines / whitespace
-                jld2_raw  = String(strip(String(get(data, "jld2_file", ""))))
-                jld2_file = isempty(jld2_raw) ? nothing : jld2_raw
+                api_key          = String(strip(String(data["api_key"])))
+                jld2_raw         = String(strip(String(get(data, "jld2_file", ""))))
+                jld2_file        = isempty(jld2_raw) ? nothing : jld2_raw
+                no_loss_constraint = Bool(get(data, "no_loss_constraint", false))
                 println("api_key length=$(length(api_key))  starts=$(first(api_key,7))...")
                 println("jld2_file=$(something(jld2_file, "(none)"))")
+                println("no_loss_constraint=$no_loss_constraint")
 
                 # Reload any previously generated strategies (best-effort — parse errors are non-fatal)
                 if isfile(STRATEGIES_FILE)
@@ -191,7 +198,8 @@ function handle_client(ws)
                 ))
 
                 consumers = generate_consumers()
-                run_simulation_ws(ws, api_key, bundle, consumers)
+                run_simulation_ws(ws, api_key, bundle, consumers;
+                                  no_loss_constraint)
             end
         end
     catch e

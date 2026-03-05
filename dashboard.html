@@ -68,6 +68,17 @@
   #controls input:focus { border-color: var(--s1); }
   #apiKey  { width: 280px; font-family: var(--mono); }
   #jld2File { width: 200px; font-family: var(--mono); }
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .toggle-label input[type="checkbox"] { accent-color: var(--s1); cursor: pointer; }
   #launchBtn {
     background: var(--s1);
     color: #0d1117;
@@ -369,6 +380,10 @@
   <div id="controls">
     <input id="apiKey"   type="password" placeholder="OpenAI API key (sk-...)">
     <input id="jld2File" type="text"     placeholder="setup_*.jld2 (optional)">
+    <label class="toggle-label" title="Instructs each LLM agent not to sustain negative profits for more than 1–2 consecutive periods">
+      <input type="checkbox" id="noLossToggle">
+      No sustained losses
+    </label>
     <button id="launchBtn" onclick="launch()">▶ Launch</button>
     <span id="status">● Disconnected</span>
   </div>
@@ -599,9 +614,8 @@ function updateScoreboard(tick, s1c, s2c, s1p, s2p) {
 function getOrCreateCard(tickNum) {
   if (pendingCards[tickNum]) return pendingCards[tickNum];
 
-  // Remove empty message if present
-  const emptyMsg = document.getElementById('empty-msg');
-  if (emptyMsg) emptyMsg.remove();
+  // Clear ticker — only the current tick stays visible
+  document.getElementById('ticker').innerHTML = '';
 
   const card = document.createElement('div');
   card.className = 'tick-card';
@@ -789,6 +803,7 @@ function setStatus(cls, text) {
 function launch() {
   const apiKey   = document.getElementById('apiKey').value.trim();
   const jld2File = document.getElementById('jld2File').value.trim();
+  const noLoss   = document.getElementById('noLossToggle').checked;
 
   if (!apiKey) { alert('Enter your OpenAI API key.'); return; }
 
@@ -805,8 +820,8 @@ function launch() {
   });
   document.getElementById('ticker').innerHTML =
     '<div id="empty-msg" style="color:var(--muted);text-align:center;padding:20px">Connecting…</div>';
-  document.getElementById('pricesTbody').innerHTML =
-    '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:8px">Waiting…</td></tr>';
+  document.getElementById('strat-col-1').innerHTML = '<div style="color:var(--muted);font-size:11px">Waiting…</div>';
+  document.getElementById('strat-col-2').innerHTML = '<div style="color:var(--muted);font-size:11px">Waiting…</div>';
   ['sb-tick','sb-s1-cust','sb-s2-cust','sb-s1-profit','sb-s2-profit','sb-s1-total','sb-s2-total']
     .forEach(id => { document.getElementById(id).textContent = '—'; });
 
@@ -819,7 +834,7 @@ function launch() {
   ws.onopen = () => {
     setStatus('connected', 'Connected — launching simulation…');
     document.getElementById('launchBtn').disabled = true;
-    ws.send(JSON.stringify({ type: 'start', api_key: apiKey, jld2_file: jld2File }));
+    ws.send(JSON.stringify({ type: 'start', api_key: apiKey, jld2_file: jld2File, no_loss_constraint: noLoss }));
   };
 
   ws.onmessage = onMessage;

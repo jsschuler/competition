@@ -174,7 +174,8 @@ end
 # load it into the running session, and return the instantiated strategy object.
 function generate_strategy(api_key::String, store_id::Int, tick::Int,
                             bundle::Bundle,
-                            own_store::Store, opp_store::Store)::Tuple{PricingStrategy, String}
+                            own_store::Store, opp_store::Store;
+                            no_loss_constraint::Bool=false)::Tuple{PricingStrategy, String}
     N    = next_strategy_number()
     sname = strategy_name(N)
 
@@ -183,11 +184,18 @@ function generate_strategy(api_key::String, store_id::Int, tick::Int,
     cost_str  = join(["$(bundle.goods[k])=$(bundle.costs[k])"
                       for k in 1:length(bundle.goods)], ", ")
 
+    loss_constraint_str = no_loss_constraint ? """
+CONSTRAINT: Do not sustain negative profits for more than 1–2 consecutive periods. \
+If your recent history shows repeated losses, you must raise prices to return to \
+profitability. Brief loss-leading on individual goods is acceptable, but persistent \
+store-level losses are not.
+""" : ""
+
     prompt = """
 You are the strategic pricing agent for Store $store_id in a repeated \
 competitive grocery game (current tick: $tick).
 Your goal is to maximise your store's cumulative profit over time.
-
+$loss_constraint_str
 GOODS AND WHOLESALE COSTS:
 $goods_str
 

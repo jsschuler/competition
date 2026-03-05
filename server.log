@@ -1,6 +1,0 @@
-╔══════════════════════════════════════════════════════╗
-║  Bertrand Competition WebSocket Server               ║
-║  ws://127.0.0.1:8765                               ║
-║  Open dashboard.html in a browser to connect.        ║
-╚══════════════════════════════════════════════════════╝
-[ Info: Listening on: 127.0.0.1:8765, thread id: 1
